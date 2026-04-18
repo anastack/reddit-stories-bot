@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+posted_posts.json
+daily_post_state.json
+prepared_posts/
+posted_posts_archive/
