@@ -9,8 +9,10 @@ from bot import (
     RedditStory,
     TranslatedStory,
     build_telegram_messages,
+    build_threads_messages,
     load_config,
     load_posted_ids,
+    post_to_threads,
     post_to_telegram,
     save_posted_ids,
 )
@@ -71,6 +73,37 @@ def get_messages_for_publish(data: dict, config) -> list[str]:
     return messages
 
 
+def get_threads_messages_for_publish(data: dict, config) -> list[str]:
+    if not config.threads_enabled:
+        return []
+
+    source = data.get("source")
+    title = data.get("title")
+    body = data.get("body")
+    if not isinstance(source, dict) or not isinstance(title, str) or not isinstance(body, str):
+        return []
+
+    try:
+        story = RedditStory(
+            post_id=str(source.get("post_id", data.get("post_id", ""))),
+            title=str(source.get("title", title)),
+            text=str(source.get("text", "")),
+            score=int(source.get("score", 0)),
+            comments=int(source.get("comments", 0)),
+            created_utc=float(source.get("created_utc", 0)),
+            trash_score=float(source.get("trash_score", 0)),
+            author=str(source.get("author", "")),
+            subreddit=str(source.get("subreddit", "")),
+            permalink=str(source.get("permalink", "")),
+        )
+        translated = TranslatedStory(title=title, body=body)
+        messages = build_threads_messages(translated, story, config.threads_max_chars)
+        data["threads_messages"] = messages
+        return messages
+    except (TypeError, ValueError):
+        return []
+
+
 def publish_prepared_posts(config, limit: int | None = None) -> int:
     posted_ids = load_posted_ids(config.state_file)
     prepared_paths = load_prepared_posts(config.prepared_posts_dir)
@@ -102,6 +135,10 @@ def publish_prepared_posts(config, limit: int | None = None) -> int:
 
         print(f"Posting prepared story {post_id}: {data.get('title', path.name)}")
         post_to_telegram(messages, config)
+        threads_messages = get_threads_messages_for_publish(data, config)
+        if threads_messages:
+            post_to_threads(threads_messages, config)
+            data["threads_status"] = "posted"
         posted_ids.add(post_id)
         save_posted_ids(config.state_file, posted_ids)
         archived_path = archive_post(path, config.posted_posts_dir, data)

@@ -95,6 +95,8 @@ python post_prepared.py
 
 Так можно сначала проверить готовые посты, отредактировать JSON вручную при необходимости, а потом отдельно запустить публикацию.
 
+Если включить `THREADS_ENABLED=true`, этот же скрипт дополнительно публикует историю в Threads. Длинные истории режутся на цепочку коротких текстовых постов.
+
 Серверный режим автопостинга:
 
 ```powershell
@@ -122,6 +124,10 @@ python daily_poster.py
 - `POSTS_PER_RUN` - сколько историй публиковать за один запуск.
 - `OPENROUTER_MODEL` - модель OpenRouter, например `openai/gpt-4o-mini`.
 - `TELEGRAM_MAX_CHARS` - лимит символов на одно сообщение. Telegram допускает до 4096, по умолчанию оставлен запас.
+- `THREADS_ENABLED` - включить или выключить публикацию в Threads.
+- `THREADS_ACCESS_TOKEN` - access token Threads API.
+- `THREADS_USER_ID` - id Threads-пользователя, обычно можно оставить `me`.
+- `THREADS_MAX_CHARS` - лимит символов на один Threads-пост.
 - `PREPARED_POSTS_DIR` - папка для готовых постов после `prepare_posts.py`.
 - `POSTED_POSTS_DIR` - архив опубликованных готовых постов после `post_prepared.py`.
 - `DAILY_POST_LIMIT` - сколько историй публиковать в день в режиме `daily_poster.py`.

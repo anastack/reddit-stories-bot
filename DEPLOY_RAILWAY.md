@@ -32,6 +32,10 @@ OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=openai/gpt-4o-mini
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHANNEL_ID=@your_channel_or_numeric_id
+THREADS_ENABLED=false
+THREADS_ACCESS_TOKEN=
+THREADS_USER_ID=me
+THREADS_MAX_CHARS=500
 POSTS_PER_RUN=3
 TELEGRAM_MAX_CHARS=3900
 STATE_FILE=data/posted_posts.json
@@ -44,6 +48,17 @@ DAILY_STATE_FILE=data/daily_post_state.json
 ```
 
 For RSS mode, leave `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` unset.
+
+For Threads cross-posting, set:
+
+```env
+THREADS_ENABLED=true
+THREADS_ACCESS_TOKEN=your_threads_access_token
+THREADS_USER_ID=me
+THREADS_MAX_CHARS=500
+```
+
+The bot publishes long stories as a chain of text posts. If `THREADS_ENABLED=false`, Threads is skipped completely.
 
 ## Persistent Storage
 

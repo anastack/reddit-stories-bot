@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+THREADS_GRAPH_URL = "https://graph.threads.net/v1.0"
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,10 @@ class Config:
     openrouter_app_name: str
     telegram_bot_token: str
     telegram_channel_id: str
+    threads_enabled: bool
+    threads_access_token: str
+    threads_user_id: str
+    threads_max_chars: int
     posts_per_run: int
     telegram_max_chars: int
     state_file: Path
@@ -147,6 +152,10 @@ def load_config() -> Config:
         openrouter_app_name=os.getenv("OPENROUTER_APP_NAME", "Reddit Telegram Story Bot").strip(),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_channel_id=os.getenv("TELEGRAM_CHANNEL_ID", "").strip(),
+        threads_enabled=parse_bool(os.getenv("THREADS_ENABLED", "false")),
+        threads_access_token=os.getenv("THREADS_ACCESS_TOKEN", "").strip(),
+        threads_user_id=os.getenv("THREADS_USER_ID", "me").strip() or "me",
+        threads_max_chars=int(os.getenv("THREADS_MAX_CHARS", "500")),
         posts_per_run=int(os.getenv("POSTS_PER_RUN", "3")),
         telegram_max_chars=int(os.getenv("TELEGRAM_MAX_CHARS", "3900")),
         state_file=Path(os.getenv("STATE_FILE", "posted_posts.json")),
@@ -161,6 +170,10 @@ def load_config() -> Config:
 
 def parse_csv(value: str) -> list[str]:
     return [item.strip().lower() for item in value.split(",") if item.strip()]
+
+
+def parse_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def load_posted_ids(path: Path) -> set[str]:
@@ -907,6 +920,108 @@ def post_to_telegram(messages: list[str], config: Config) -> None:
                 f"Telegram sendMessage failed: HTTP {response.status_code} {response.text}"
             )
         time.sleep(1)
+
+
+def build_threads_messages(
+    translated: TranslatedStory,
+    story: RedditStory,
+    max_chars: int,
+) -> list[str]:
+    source = story.permalink.strip()
+    full_text = (
+        f"{translated.title.strip()}\n\n"
+        f"{strip_html_tags(translated.body).strip()}\n\n"
+        f"Источник: {source}"
+    ).strip()
+    return split_for_threads(full_text, max_chars)
+
+
+def split_for_threads(text: str, limit: int) -> list[str]:
+    if limit < 120:
+        raise RuntimeError("THREADS_MAX_CHARS must be at least 120")
+
+    plain_parts = split_for_telegram(text, limit - len("\n\n99/99"))
+    if len(plain_parts) == 1:
+        return plain_parts
+
+    total = len(plain_parts)
+    messages = []
+    for index, part in enumerate(plain_parts, start=1):
+        suffix = f"\n\n{index}/{total}"
+        messages.append(part[: limit - len(suffix)].rstrip() + suffix)
+    return messages
+
+
+def strip_html_tags(text: str) -> str:
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p\s*>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return unescape(text)
+
+
+def post_to_threads(messages: list[str], config: Config) -> None:
+    if not config.threads_enabled:
+        return
+    if not config.threads_access_token:
+        raise RuntimeError("THREADS_ENABLED=true but THREADS_ACCESS_TOKEN is missing")
+    if not config.threads_user_id:
+        raise RuntimeError("THREADS_ENABLED=true but THREADS_USER_ID is missing")
+
+    reply_to_id = None
+    for message in messages:
+        container_id = create_threads_text_container(message, config, reply_to_id)
+        published_id = publish_threads_container(container_id, config)
+        reply_to_id = published_id
+        time.sleep(2)
+
+
+def create_threads_text_container(
+    text: str,
+    config: Config,
+    reply_to_id: str | None = None,
+) -> str:
+    payload = {
+        "media_type": "TEXT",
+        "text": text,
+        "access_token": config.threads_access_token,
+    }
+    if reply_to_id:
+        payload["reply_to_id"] = reply_to_id
+
+    response = requests.post(
+        f"{THREADS_GRAPH_URL}/{config.threads_user_id}/threads",
+        data=payload,
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(
+            f"Threads container creation failed: HTTP {response.status_code} {response.text}"
+        )
+
+    container_id = str(response.json().get("id", "")).strip()
+    if not container_id:
+        raise RuntimeError(f"Threads container creation returned no id: {response.text}")
+    return container_id
+
+
+def publish_threads_container(container_id: str, config: Config) -> str:
+    response = requests.post(
+        f"{THREADS_GRAPH_URL}/{config.threads_user_id}/threads_publish",
+        data={
+            "creation_id": container_id,
+            "access_token": config.threads_access_token,
+        },
+        timeout=30,
+    )
+    if not response.ok:
+        raise RuntimeError(
+            f"Threads publish failed: HTTP {response.status_code} {response.text}"
+        )
+
+    published_id = str(response.json().get("id", "")).strip()
+    if not published_id:
+        raise RuntimeError(f"Threads publish returned no id: {response.text}")
+    return published_id
 
 
 def main() -> None:
