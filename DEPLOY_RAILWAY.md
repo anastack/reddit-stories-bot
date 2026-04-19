@@ -10,7 +10,7 @@ Railway starts:
 python daily_poster.py
 ```
 
-The worker publishes up to `DAILY_POST_LIMIT` stories per day. Between posts it waits a random interval from `DAILY_INTERVAL_MIN_MINUTES` to `DAILY_INTERVAL_MAX_MINUTES`.
+The worker starts publishing at `DAILY_START_HOUR` in `DAILY_TIMEZONE`, publishes up to `DAILY_POST_LIMIT` stories per day, and waits a random interval from `DAILY_INTERVAL_MIN_MINUTES` to `DAILY_INTERVAL_MAX_MINUTES` between posts.
 
 If there are no prepared posts in the queue, the worker prepares new stories first.
 
@@ -42,8 +42,10 @@ STATE_FILE=data/posted_posts.json
 PREPARED_POSTS_DIR=data/prepared_posts
 POSTED_POSTS_DIR=data/posted_posts_archive
 DAILY_POST_LIMIT=5
-DAILY_INTERVAL_MIN_MINUTES=60
-DAILY_INTERVAL_MAX_MINUTES=120
+DAILY_INTERVAL_MIN_MINUTES=120
+DAILY_INTERVAL_MAX_MINUTES=180
+DAILY_START_HOUR=10
+DAILY_TIMEZONE=Europe/Moscow
 DAILY_STATE_FILE=data/daily_post_state.json
 ```
 

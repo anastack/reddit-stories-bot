@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, time as datetime_time, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from bot import load_config
 from post_prepared import load_prepared_posts, publish_prepared_posts
@@ -26,14 +27,38 @@ def save_daily_state(path: Path, state: dict) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def today_key() -> str:
-    return datetime.now().date().isoformat()
+def schedule_timezone(config) -> ZoneInfo:
+    return ZoneInfo(config.daily_timezone)
 
 
-def seconds_until_tomorrow() -> int:
-    now = datetime.now()
-    tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
-    return max(int((tomorrow - now).total_seconds()), 60)
+def now_in_schedule_timezone(config) -> datetime:
+    return datetime.now(schedule_timezone(config))
+
+
+def today_key(config) -> str:
+    return now_in_schedule_timezone(config).date().isoformat()
+
+
+def daily_start_at(value: datetime, config) -> datetime:
+    start_hour = min(max(config.daily_start_hour, 0), 23)
+    return datetime.combine(
+        value.date(),
+        datetime_time(hour=start_hour),
+        tzinfo=value.tzinfo,
+    )
+
+
+def seconds_until_today_start(config) -> int:
+    now = now_in_schedule_timezone(config)
+    start = daily_start_at(now, config)
+    return max(int((start - now).total_seconds()), 0)
+
+
+def seconds_until_next_day_start(config) -> int:
+    now = now_in_schedule_timezone(config)
+    tomorrow = now + timedelta(days=1)
+    start = daily_start_at(tomorrow, config)
+    return max(int((start - now).total_seconds()), 60)
 
 
 def sleep_between_posts(config) -> None:
@@ -58,8 +83,17 @@ def main() -> None:
 
     while True:
         config = load_config()
+        seconds = seconds_until_today_start(config)
+        if seconds > 0:
+            print(
+                f"Waiting until {config.daily_start_hour:02d}:00 "
+                f"{config.daily_timezone} before posting."
+            )
+            time.sleep(seconds)
+            continue
+
         state = load_daily_state(config.daily_state_file)
-        key = today_key()
+        key = today_key(config)
 
         if state.get("date") != key:
             state = {"date": key, "posted_count": 0}
@@ -67,10 +101,10 @@ def main() -> None:
 
         posted_count = int(state.get("posted_count", 0))
         if posted_count >= config.daily_post_limit:
-            seconds = seconds_until_tomorrow()
+            seconds = seconds_until_next_day_start(config)
             print(
                 f"Daily limit reached: {posted_count}/{config.daily_post_limit}. "
-                f"Sleeping until tomorrow."
+                f"Sleeping until the next posting window."
             )
             time.sleep(seconds)
             continue

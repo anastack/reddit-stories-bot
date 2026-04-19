@@ -58,6 +58,8 @@ class Config:
     daily_post_limit: int
     daily_interval_min_minutes: int
     daily_interval_max_minutes: int
+    daily_start_hour: int
+    daily_timezone: str
     daily_state_file: Path
 
 
@@ -162,8 +164,10 @@ def load_config() -> Config:
         prepared_posts_dir=Path(os.getenv("PREPARED_POSTS_DIR", "prepared_posts")),
         posted_posts_dir=Path(os.getenv("POSTED_POSTS_DIR", "posted_posts_archive")),
         daily_post_limit=int(os.getenv("DAILY_POST_LIMIT", "5")),
-        daily_interval_min_minutes=int(os.getenv("DAILY_INTERVAL_MIN_MINUTES", "60")),
-        daily_interval_max_minutes=int(os.getenv("DAILY_INTERVAL_MAX_MINUTES", "120")),
+        daily_interval_min_minutes=int(os.getenv("DAILY_INTERVAL_MIN_MINUTES", "120")),
+        daily_interval_max_minutes=int(os.getenv("DAILY_INTERVAL_MAX_MINUTES", "180")),
+        daily_start_hour=int(os.getenv("DAILY_START_HOUR", "10")),
+        daily_timezone=os.getenv("DAILY_TIMEZONE", "Europe/Moscow").strip() or "Europe/Moscow",
         daily_state_file=Path(os.getenv("DAILY_STATE_FILE", "daily_post_state.json")),
     )
 
